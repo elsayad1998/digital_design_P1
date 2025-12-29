@@ -32,33 +32,57 @@
 
 // What is the limit in case I do a full calculation over the whole buffer after each sample
 `default_nettype none
+
 module ste_led_bar #(
-  parameter int DATA_W                 =  4, 
-  parameter logic[DATA_W-1:0] DATA_MAX =  4'hf,
-  parameter int LED_NR                 =  8     // 
+  parameter int  DATA_W = 4,
+  parameter logic [DATA_W-1:0] DATA_MAX = 4'hf,
+  parameter int  LED_NR = 8
 ) (
-  input   wire                clk             , // I; System clock 
-  input   wire                rst_n           , // I; system cock reset (active low)  
-  input   wire  [DATA_W-1:0]  din_i           , // I; Input data    
-  input   wire                din_update_i    , // I; Input data update 
-  input   wire                clr_i           , // I; Clear  data 
-  output  logic [LED_NR-1:0]  led_o             // O; LEDs drive signal 
+  input  wire               clk,
+  input  wire               rst_n,          // async reset (active low)
+  input  wire [DATA_W-1:0]  din_i,          // value to display
+  input  wire               din_update_i,   // 1-clock pulse: new value
+  input  wire               clr_i,           // clear LEDs
+  output logic [LED_NR-1:0] led_o            // LED bar output
 );
-  
-  
-  // -------------------------------------------------------------------------
-  // Definition 
-  // -------------------------------------------------------------------------
-      
-    
-  // -------------------------------------------------------------------------
-  // Implementation
-  // -------------------------------------------------------------------------
- 
-  
- 
-  assign led_o = '0;
-  
+
+  // ------------------------------------------------------------
+  // Function: converts "number of LEDs" -> bar pattern
+  // ------------------------------------------------------------
+  function automatic logic [LED_NR-1:0] thermo(input int unsigned n);
+    logic [LED_NR-1:0] tmp;
+    begin
+      if (n == 0)
+        tmp = '0;                          // 00000000
+      else if (n >= LED_NR)
+        tmp = {LED_NR{1'b1}};              // 11111111
+      else
+        tmp = ({LED_NR{1'b1}} >> (LED_NR - n));
+      return tmp;
+    end
+  endfunction
+
+  // ------------------------------------------------------------
+  // Main sequential logic
+  // ------------------------------------------------------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      led_o <= '0;                         // immediate reset
+    end else if (clr_i) begin
+      led_o <= '0;                         // clear LEDs
+    end else if (din_update_i) begin
+      int unsigned n_leds;
+
+      // Scale input value to range 0..8
+      // din_i = 0        -> n_leds = 0
+      // din_i = DATA_MAX -> n_leds = 8
+      n_leds = (int'(din_i) * LED_NR) / (int'(DATA_MAX) + 1);
+
+      led_o <= thermo(n_leds);              // update LED bar
+    end
+    // else: keep old led_o
+  end
+
 endmodule
 
-`default_nettype wire  
+`default_nettype wire
